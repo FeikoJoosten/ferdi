@@ -1,11 +1,12 @@
 import {
-  app, Menu, nativeImage, nativeTheme, systemPreferences, Tray,
+  app, Menu, nativeImage, nativeTheme, systemPreferences, Tray, ipcMain,
 } from 'electron';
 import path from 'path';
 
 const FILE_EXTENSION = process.platform === 'win32' ? 'ico' : 'png';
 const INDICATOR_TRAY_PLAIN = 'tray';
 const INDICATOR_TRAY_UNREAD = 'tray-unread';
+const INDICATOR_TRAY_INDIRECT = 'tray-indirect';
 
 export default class TrayIcon {
   trayIcon = null;
@@ -14,29 +15,55 @@ export default class TrayIcon {
 
   themeChangeSubscriberId = null;
 
+  trayMenu = null;
+
+  trayMenuTemplate = [
+    {
+      label: 'Show Ferdi',
+      click() {
+        if (app.mainWindow.isMinimized()) {
+          app.mainWindow.restore();
+        }
+        app.mainWindow.show();
+        app.mainWindow.focus();
+      },
+    },
+    {
+      label: 'Disable Notifications & Audio',
+      click() {
+        app.mainWindow.webContents.send('muteApp');
+      },
+    },
+    {
+      label: 'Quit Ferdi',
+      click() {
+        app.quit();
+      },
+    },
+  ];
+
+  _updateTrayMenu(appSettings) {
+    if (appSettings.type === 'app') {
+      const { isAppMuted } = appSettings.data;
+      this.trayMenuTemplate[1].label = isAppMuted ? 'Enable Notifications && Audio' : 'Disable Notifications && Audio';
+      this.trayMenu = Menu.buildFromTemplate(this.trayMenuTemplate);
+    }
+  }
+
   show() {
     if (this.trayIcon) return;
 
     this.trayIcon = new Tray(this._getAsset('tray', INDICATOR_TRAY_PLAIN));
-    const trayMenuTemplate = [
-      {
-        label: 'Show Ferdi',
-        click() {
-          if (app.mainWindow.isMinimized()) {
-            app.mainWindow.restore();
-          }
-          app.mainWindow.show();
-          app.mainWindow.focus();
-        },
-      }, {
-        label: 'Quit Ferdi',
-        click() {
-          app.quit();
-        },
-      },
-    ];
 
-    const trayMenu = Menu.buildFromTemplate(trayMenuTemplate);
+    this.trayMenu = Menu.buildFromTemplate(this.trayMenuTemplate);
+
+    ipcMain.on('initialAppSettings', (event, appSettings) => {
+      this._updateTrayMenu(appSettings);
+    });
+
+    ipcMain.on('updateAppSettings', (event, appSettings) => {
+      this._updateTrayMenu(appSettings);
+    });
 
     this.trayIcon.on('click', () => {
       if (app.mainWindow.isMinimized()) {
@@ -50,7 +77,7 @@ export default class TrayIcon {
     });
 
     this.trayIcon.on('right-click', () => {
-      this.trayIcon.popUpContextMenu(trayMenu);
+      this.trayIcon.popUpContextMenu(this.trayMenu);
     });
 
     if (process.platform === 'darwin') {
@@ -77,14 +104,23 @@ export default class TrayIcon {
     this._refreshIcon();
   }
 
+  _getAssetFromIndicator(indicator) {
+    if (indicator === '•') {
+      return INDICATOR_TRAY_INDIRECT;
+    } if (indicator !== 0) {
+      return INDICATOR_TRAY_UNREAD;
+    }
+    return INDICATOR_TRAY_PLAIN;
+  }
+
   _refreshIcon() {
     if (!this.trayIcon) return;
 
-    this.trayIcon.setImage(this._getAsset('tray', this.indicator !== 0 ? INDICATOR_TRAY_UNREAD : INDICATOR_TRAY_PLAIN));
+    this.trayIcon.setImage(this._getAsset('tray', this._getAssetFromIndicator(this.indicator)));
 
     if (process.platform === 'darwin') {
       this.trayIcon.setPressedImage(
-        this._getAsset('tray', `${this.indicator !== 0 ? INDICATOR_TRAY_UNREAD : INDICATOR_TRAY_PLAIN}-active`),
+        this._getAsset('tray', `${this._getAssetFromIndicator(this.indicator)}-active`),
       );
     }
   }
