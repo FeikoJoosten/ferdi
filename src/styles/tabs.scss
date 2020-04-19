@@ -65,10 +65,7 @@
     position: absolute;
     right: 8px;
 
-    &.is-indirect { 
-      padding-top: 0;
-      background: #0088cc;
-	}
+    &.is-indirect { padding-top: 0; }
     &.hibernating { 
       padding-top: 0; 
       background: $theme-gray; 
@@ -95,10 +92,7 @@
     right: 8px;
     width: 17px;
 
-    &.is-indirect { 
-      padding-top: 0;
-      background: #0088cc;
-	}
+    &.is-indirect { padding-top: 0; }
   }
 
   &.is-reordering { z-index: 99999; }
